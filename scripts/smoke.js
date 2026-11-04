@@ -49,7 +49,10 @@ async function main() {
     request('/api/registration', { method: 'POST', body: profile }),
     request('/api/registration', { method: 'POST', body: { ...profile, email: profile.email.toUpperCase() } }),
   ]);
-  assert.deepEqual(registrations.map((result) => result.status).sort(), [201, 409]);
+  assert.deepEqual(registrations.map((result) => result.status).sort(), [201, 400]);
+  assert.deepEqual(registrations.find((result) => result.status === 400).data, {
+    error: { code: 'EMAIL_EXISTS', message: 'User exists' },
+  });
   const registered = registrations.find((result) => result.status === 201).data;
   assert.equal(registered.email, profile.email);
   assert.equal('passwordHash' in registered, false);

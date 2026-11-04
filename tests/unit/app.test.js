@@ -85,10 +85,10 @@ describe('POST /api/registration', () => {
     expect(store.createUser).not.toHaveBeenCalled();
   });
 
-  test('returns a conflict when the email already exists', async () => {
-    store.createUser.mockRejectedValue(new AppError(409, 'EMAIL_EXISTS', 'Email is already registered'));
-    const response = await request(app).post('/api/registration').send(registration).expect(409);
-    expect(response.body.error.code).toBe('EMAIL_EXISTS');
+  test('returns a bad request when the email already exists', async () => {
+    store.createUser.mockRejectedValue(new AppError(400, 'EMAIL_EXISTS', 'User exists'));
+    const response = await request(app).post('/api/registration').send(registration).expect(400);
+    expect(response.body).toEqual({ error: { code: 'EMAIL_EXISTS', message: 'User exists' } });
     expect(response.body).not.toHaveProperty('stack');
   });
 });

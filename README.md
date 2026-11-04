@@ -100,7 +100,7 @@ curl --fail-with-body -X POST http://localhost:3000/api/registration \
   -d '{"email":"alex@example.com","password":"ExamplePass123!","name":"Alex Morgan","dateOfBirth":"1995-06-15"}'
 ```
 
-Registration requires an email of at most 254 characters, a password of at least 8 Unicode characters and at most 72 UTF-8 bytes, a name of 1–100 characters after trimming, and a real `YYYY-MM-DD` date between `1900-01-01` and today in UTC. Email addresses are trimmed and lowercased. A duplicate returns `409`.
+Registration requires an email of at most 254 characters, a password of at least 8 Unicode characters and at most 72 UTF-8 bytes, a name of 1–100 characters after trimming, and a real `YYYY-MM-DD` date between `1900-01-01` and today in UTC. Email addresses are trimmed and lowercased. A duplicate returns `400 Bad Request` with `{"error":{"code":"EMAIL_EXISTS","message":"User exists"}}`.
 
 Use the seeded admin account immediately, or substitute your registered email and password:
 
@@ -138,7 +138,7 @@ Two milks and one bread cost `680` cents. Cash gives a `68` cent discount and a 
 
 All money is stored and returned as integer USD cents. The cash discount is `Math.round(subtotalCents * 0.1)`, including half-cent rounding upward. An empty cart cannot be checked out. Saving the order and clearing the cart use one database transaction, with concurrent changes to a user's cart serialized.
 
-Errors use `{"error":{"code":"...","message":"..."}}`. Typical statuses are `400` for invalid input or an empty checkout, `401` for invalid credentials or tokens, `404` for unknown routes or products, `409` for duplicate emails, and `413` for oversized JSON bodies. Registration and checkout return `201`; login and cart operations return `200`.
+Errors use `{"error":{"code":"...","message":"..."}}`. Typical statuses are `400` for invalid input, duplicate emails, or an empty checkout, `401` for invalid credentials or tokens, `404` for unknown routes or products, and `413` for oversized JSON bodies. Registration and checkout return `201`; login and cart operations return `200`.
 
 ## Tests and coverage
 

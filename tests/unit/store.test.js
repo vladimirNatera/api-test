@@ -90,11 +90,11 @@ describe('users', () => {
     ]);
   });
 
-  test('maps the email unique constraint to a conflict', async () => {
+  test('maps the email unique constraint to a bad request', async () => {
     const { pool, store } = database();
     pool.query.mockRejectedValueOnce({ code: '23505', constraint: 'users_email_unique' });
     await expect(store.createUser({ email: 'person@example.com' })).rejects.toMatchObject({
-      status: 409, code: 'EMAIL_EXISTS', message: 'Email is already registered',
+      status: 400, code: 'EMAIL_EXISTS', message: 'User exists',
     });
   });
 

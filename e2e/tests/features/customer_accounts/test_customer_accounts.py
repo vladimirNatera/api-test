@@ -161,7 +161,7 @@ class TestCustomerAccountErrors:
         with allure.step("Reject another profile with a case-insensitive duplicate email"):
             duplicate_registration = CheckoutRegistrationFactory.create(email=registration_request.email.upper())
             response = anonymous_steps.post_registration(duplicate_registration)
-            error = response.assert_status_code(HTTPStatus.CONFLICT).extract(CheckoutErrorResponse.model_validate)
+            error = response.assert_status_code(HTTPStatus.BAD_REQUEST).extract(CheckoutErrorResponse.model_validate)
             check_error(error, ErrorCode.EMAIL_EXISTS)
 
         with allure.step("Sign in with the original credentials and recover the original profile"):

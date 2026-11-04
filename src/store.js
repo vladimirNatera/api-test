@@ -52,7 +52,7 @@ function createStore(pool) {
         return result.rows[0];
       } catch (error) {
         if (error.code === '23505' && error.constraint === 'users_email_unique') {
-          throw new AppError(409, 'EMAIL_EXISTS', 'Email is already registered');
+          throw new AppError(400, 'EMAIL_EXISTS', 'User exists');
         }
 
         throw error;

@@ -44,13 +44,17 @@ paths:
               schema:
                 $ref: '#/components/schemas/User'
         '400':
-          $ref: '#/components/responses/BadRequest'
-        '409':
-          description: An account already uses this email address
+          description: Bad request — invalid input or a user already exists with this email address
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+              examples:
+                userExists:
+                  value:
+                    error:
+                      code: EMAIL_EXISTS
+                      message: User exists
         '413':
           $ref: '#/components/responses/TooLarge'
         '500':

@@ -1,0 +1,31 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: checkout
+      POSTGRES_PASSWORD: checkout_demo_password
+      POSTGRES_DB: checkout
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U checkout -d checkout"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  api:
+    build: .
+    environment:
+      DATABASE_URL: postgres://checkout:checkout_demo_password@db:5432/checkout
+      JWT_SECRET: ${JWT_SECRET:-local-demo-secret-change-before-deploying-123456789}
+      PORT: 3000
+    ports:
+      - "${API_PORT:-3000}:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["sh", "-c", "npm run db:migrate && npm run db:seed && exec node src/server.js"]
+
+volumes:
+  postgres_data:

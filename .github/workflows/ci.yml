@@ -1,0 +1,117 @@
+name: Checkout API
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checkout-api-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: docker build --tag checkout-api:ci .
+
+  linters:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Load coverage baseline before this change
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -n "$BASE_SHA" ] && [ "$BASE_SHA" != "0000000000000000000000000000000000000000" ]; then
+            if git cat-file -e "$BASE_SHA:coverage-baseline.json" 2>/dev/null; then
+              git show "$BASE_SHA:coverage-baseline.json" > "$RUNNER_TEMP/base-coverage.json"
+              echo "COVERAGE_BASELINE_PATH=$RUNNER_TEMP/base-coverage.json" >> "$GITHUB_ENV"
+            fi
+          fi
+      - run: npm run test:coverage
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unit-test-coverage
+          path: coverage/
+          if-no-files-found: warn
+
+  integration:
+    runs-on: ubuntu-latest
+    needs: [build, linters, unit-tests]
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: checkout
+          POSTGRES_PASSWORD: checkout_ci_password
+          POSTGRES_DB: checkout
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U checkout -d checkout"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://checkout:checkout_ci_password@localhost:5432/checkout
+      JWT_SECRET: checkout-ci-only-secret-at-least-32-characters
+      PORT: 3000
+      API_URL: http://127.0.0.1:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run db:migrate
+      - run: npm run db:seed
+      - name: Start the application and test PostgreSQL integration
+        run: |
+          npm start > "$RUNNER_TEMP/checkout-api.log" 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent "$API_URL/openapi.yaml" > /dev/null; then
+              break
+            fi
+            if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+              cat "$RUNNER_TEMP/checkout-api.log"
+              exit 1
+            fi
+            sleep 1
+          done
+          curl --fail --silent "$API_URL/openapi.yaml" > /dev/null
+          npm run test:integration
+      - name: Show application log
+        if: failure()
+        run: cat "$RUNNER_TEMP/checkout-api.log" 2>/dev/null || true

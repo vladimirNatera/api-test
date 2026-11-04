@@ -1,0 +1,40 @@
+{
+  "name": "checkout-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Express and PostgreSQL grocery checkout REST API",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "build": "node scripts/build.js",
+    "db:migrate": "node scripts/database.js migrate",
+    "db:seed": "node scripts/database.js seed",
+    "lint": "eslint . && node scripts/validate-openapi.js",
+    "test": "jest --runInBand",
+    "test:coverage": "jest --runInBand --coverage && node scripts/check-coverage.js",
+    "coverage:check": "node scripts/check-coverage.js",
+    "coverage:update": "node scripts/check-coverage.js --update",
+    "test:integration": "node scripts/smoke.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "dotenv": "^17.4.2",
+    "express": "^5.3.0",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.23.1",
+    "swagger-ui-express": "^5.0.1"
+  },
+  "devDependencies": {
+    "@apidevtools/swagger-parser": "^12.1.0",
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.14.0",
+    "globals": "^16.5.0",
+    "jest": "^30.5.2",
+    "supertest": "^7.3.1"
+  }
+}

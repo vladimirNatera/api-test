@@ -1,0 +1,22 @@
+name: checkout-allure
+
+services:
+  allure:
+    image: frankescobar/allure-docker-service:2.44.0
+    environment:
+      CHECK_RESULTS_EVERY_SECONDS: NONE
+      KEEP_HISTORY: '1'
+      KEEP_HISTORY_LATEST: '20'
+    ports:
+      - '127.0.0.1:${ALLURE_PORT:-5050}:5050'
+    volumes:
+      - allure-projects:/app/projects
+    healthcheck:
+      test: ['CMD', 'curl', '--fail', '--silent', 'http://localhost:5050/allure-docker-service/version']
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 20s
+
+volumes:
+  allure-projects:

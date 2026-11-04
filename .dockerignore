@@ -14,3 +14,4 @@ tests
 main.py
 pyproject.toml
 __pycache__
+e2e

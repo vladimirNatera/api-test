@@ -115,3 +115,74 @@ jobs:
       - name: Show application log
         if: failure()
         run: cat "$RUNNER_TEMP/checkout-api.log" 2>/dev/null || true
+
+  e2e-tests:
+    runs-on: ubuntu-latest
+    needs: [build, linters, unit-tests]
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: checkout
+          POSTGRES_PASSWORD: checkout_e2e_password
+          POSTGRES_DB: checkout
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U checkout -d checkout"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://checkout:checkout_e2e_password@localhost:5432/checkout
+      JWT_SECRET: checkout-e2e-only-secret-at-least-32-characters
+      PORT: 3000
+      API_URL: http://127.0.0.1:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - run: python -m pip install uv==0.11.2
+      - run: npm ci
+      - run: uv sync --frozen --project e2e
+      - name: Check Python code style
+        run: |
+          uv run --frozen --project e2e ruff check e2e
+          uv run --frozen --project e2e ruff format --check e2e
+      - run: npm run db:migrate
+      - run: npm run db:seed
+      - name: Run Python business scenarios against PostgreSQL
+        run: |
+          node src/server.js > "$RUNNER_TEMP/checkout-e2e.log" 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent "$API_URL/openapi.yaml" > /dev/null; then
+              break
+            fi
+            if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+              cat "$RUNNER_TEMP/checkout-e2e.log"
+              exit 1
+            fi
+            sleep 1
+          done
+          curl --fail --silent "$API_URL/openapi.yaml" > /dev/null
+          uv run --frozen --project e2e python e2e/run.py
+      - name: Upload Allure results and JUnit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: |
+            e2e/allure-results/
+            e2e/test-results/
+          if-no-files-found: warn
+      - name: Show application log
+        if: failure()
+        run: cat "$RUNNER_TEMP/checkout-e2e.log" 2>/dev/null || true

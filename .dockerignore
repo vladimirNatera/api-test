@@ -1,0 +1,16 @@
+.git
+.github
+.agents
+.codex
+.idea
+.venv
+node_modules
+coverage
+tests
+.env
+.env.*
+!.env.example
+*.log
+main.py
+pyproject.toml
+__pycache__

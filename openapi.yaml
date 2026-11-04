@@ -1,0 +1,410 @@
+openapi: 3.0.3
+info:
+  title: Checkout API
+  version: 1.0.0
+  description: |
+    A demo grocery checkout API. There are four business paths: registration,
+    login, cart, and checkout. The cart path supports reading and replacement.
+    Prices are USD integer cents. Cash receives a 10% discount rounded to the
+    nearest cent; credit cards receive no discount. Credit card checkout records
+    the payment method and does not charge a real card.
+    This document is served at /openapi.yaml and Swagger UI at /docs.
+servers:
+  - url: http://localhost:3000
+tags:
+  - name: Authentication
+  - name: Cart
+  - name: Checkout
+security:
+  - bearerAuth: []
+paths:
+  /api/registration:
+    post:
+      tags: [Authentication]
+      operationId: registerUser
+      summary: Register a customer
+      description: Email addresses are trimmed, lowercased, and unique regardless of case.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Registration'
+            example:
+              email: alex@example.com
+              password: ExamplePass123!
+              name: Alex Morgan
+              dateOfBirth: '1995-06-15'
+      responses:
+        '201':
+          description: Customer created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: An account already uses this email address
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/login:
+    post:
+      tags: [Authentication]
+      operationId: login
+      summary: Obtain an access token
+      description: Use a registered email address or the seeded admin login, admin.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Login'
+            example:
+              login: admin
+              password: Qwerty123!
+      responses:
+        '200':
+          description: Authenticated; use the token in the Authorization Bearer header
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [token, tokenType, expiresIn, user]
+                properties:
+                  token:
+                    type: string
+                  tokenType:
+                    type: string
+                    enum: [Bearer]
+                  expiresIn:
+                    type: integer
+                    example: 3600
+                  user:
+                    $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Login or password is incorrect
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/cart:
+    get:
+      tags: [Cart]
+      operationId: getCart
+      summary: Read the current user's cart and available groceries
+      responses:
+        '200':
+          description: Current cart and product catalogue
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    put:
+      tags: [Cart]
+      operationId: replaceCart
+      summary: Replace the current user's entire cart
+      description: |
+        Send at most 20 distinct products, each with quantity 1 through 99.
+        Repeated product IDs are invalid. An empty items array clears the cart.
+        Prices are read from the database; client prices are not accepted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  minItems: 0
+                  maxItems: 20
+                  items:
+                    $ref: '#/components/schemas/CartInputItem'
+            example:
+              items:
+                - productId: 1
+                  quantity: 2
+                - productId: 2
+                  quantity: 1
+      responses:
+        '200':
+          description: Updated cart and product catalogue
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: At least one product does not exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/checkout:
+    post:
+      tags: [Checkout]
+      operationId: checkout
+      summary: Place an order and clear the cart
+      description: |
+        An empty cart is rejected. The order captures current product prices and
+        is saved in the same database transaction that clears the cart.
+        Cash discount is round(subtotalCents * 0.1); credit card discount is zero.
+        No card details are required and no real payment is processed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [paymentMethod]
+              properties:
+                paymentMethod:
+                  $ref: '#/components/schemas/PaymentMethod'
+            example:
+              paymentMethod: cash
+      responses:
+        '201':
+          description: Order created and cart cleared
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access tokens expire after one hour.
+  responses:
+    BadRequest:
+      description: Missing, malformed, or invalid input, including an empty checkout cart
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: A valid unexpired Bearer token is required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    TooLarge:
+      description: JSON request body exceeds 32 KB
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    InternalError:
+      description: An unexpected server error occurred
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Registration:
+      type: object
+      additionalProperties: false
+      required: [email, password, name, dateOfBirth]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: Trimmed and converted to lowercase before storage.
+        password:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 72
+          description: At least 8 Unicode characters and at most 72 UTF-8 bytes; multibyte characters use more than one byte.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Between 1 and 100 characters after trimming whitespace.
+        dateOfBirth:
+          type: string
+          format: date
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+          description: A real calendar date from 1900-01-01 through today in UTC, inclusive.
+    Login:
+      type: object
+      additionalProperties: false
+      required: [login, password]
+      properties:
+        login:
+          type: string
+          minLength: 1
+          maxLength: 254
+          description: Email address or admin, trimmed and case insensitive.
+        password:
+          type: string
+          format: password
+          minLength: 1
+          maxLength: 72
+          description: Nonempty password, at most 72 UTF-8 bytes.
+    User:
+      type: object
+      required: [id, email, name, dateOfBirth, role]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        dateOfBirth:
+          type: string
+          format: date
+        role:
+          type: string
+          enum: [customer, admin]
+    Product:
+      type: object
+      required: [id, name, priceCents]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+        name:
+          type: string
+        priceCents:
+          type: integer
+          minimum: 0
+    CartInputItem:
+      type: object
+      additionalProperties: false
+      required: [productId, quantity]
+      properties:
+        productId:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+        quantity:
+          type: integer
+          minimum: 1
+          maximum: 99
+    CartItem:
+      type: object
+      required: [productId, name, unitPriceCents, quantity, lineTotalCents]
+      properties:
+        productId:
+          type: integer
+          minimum: 1
+        name:
+          type: string
+        unitPriceCents:
+          type: integer
+          minimum: 0
+        quantity:
+          type: integer
+          minimum: 1
+          maximum: 99
+        lineTotalCents:
+          type: integer
+          minimum: 0
+    Cart:
+      type: object
+      required: [items, currency, subtotalCents, availableProducts]
+      properties:
+        items:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/CartItem'
+        currency:
+          type: string
+          enum: [USD]
+        subtotalCents:
+          type: integer
+          minimum: 0
+        availableProducts:
+          type: array
+          items:
+            $ref: '#/components/schemas/Product'
+    PaymentMethod:
+      type: string
+      enum: [cash, credit_card]
+    Order:
+      type: object
+      required: [id, createdAt, items, currency, subtotalCents, discountCents, totalCents, paymentMethod]
+      properties:
+        id:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        items:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/CartItem'
+        currency:
+          type: string
+          enum: [USD]
+        subtotalCents:
+          type: integer
+          minimum: 1
+        discountCents:
+          type: integer
+          minimum: 0
+        totalCents:
+          type: integer
+          minimum: 1
+        paymentMethod:
+          $ref: '#/components/schemas/PaymentMethod'
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string

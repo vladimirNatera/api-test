@@ -182,3 +182,18 @@ These checks make real HTTP requests and write test data, so use a development o
 4. `integration`: start PostgreSQL, migrate and seed it, start the API, and run the integration checks after the first three jobs pass.
 
 The workflow uses read-only repository permissions. To prevent merging failed checks, configure a GitHub branch ruleset requiring these job checks on `main`.
+
+## Python E2E business tests
+
+The `e2e/` project covers registration, login, catalogue browsing, cart persistence, cash/card checkout, duplicate accounts, and cart ownership through the real API and PostgreSQL. Its structure separates typed models, factories, service steps, business assertions, and tests. Allure reports include business stories, named steps, and redacted HTTP attachments.
+
+```sh
+docker compose up --build -d
+docker compose -f compose.allure.yaml up -d --wait
+uv sync --frozen --project e2e
+uv run --frozen --project e2e python e2e/run.py --publish
+```
+
+Requires Python 3.14 and `uv`. The Allure server runs at <http://localhost:5050>; the runner prints a link to the generated report. The additional GitHub Actions `e2e-tests` job runs Python lint checks and business scenarios, then uploads Allure and JUnit artifacts even when tests fail.
+
+See [the E2E README](e2e/README.md) for scenario details, configuration, focused runs, report publishing, and project structure.
